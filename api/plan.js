@@ -122,8 +122,9 @@ async function askGemini(key, { system, past, message, images }) {
   }
   // Report the most useful reason: a real problem beats "model not available".
   const best = errors.find((e) => e.code === "rate_limited") || errors.find((e) => e.code === "overloaded") || errors.find((e) => e.code !== "model_missing") || errors[0];
-  if (best && best.code === "model_missing") best.code = "ai_error";
-  throw best || fail("ai_error", "No Gemini model was available.");
+  if (!best) throw fail("ai_error", "No Gemini model was available.");
+  const seen = [...new Set(errors.map((e) => e.message))];
+  throw fail(best.code === "model_missing" ? "ai_error" : best.code, seen.join(" | "), best.httpStatus);
 }
 
 async function askClaude(key, { system, past, message, images }) {
