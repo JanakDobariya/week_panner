@@ -5,7 +5,8 @@ import { checkAuth, extractJson } from "./_lib.js";
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 // Tried in order; the first model the API accepts is used.
-const geminiModels = () => [...new Set([process.env.GEMINI_MODEL, "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"].filter(Boolean))];
+const geminiModels = () => [...new Set([process.env.GEMINI_MODEL, "gemini-3.8-flash", "gemini-flash-latest"].filter(Boolean))];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -87,37 +88,42 @@ async function askGemini(key, { system, past, message, images }) {
     generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0.2 },
   });
 
-  let lastError = null;
+  // Each model gets up to 3 tries when it's busy; then the next model is tried.
+  const errors = [];
   for (const model of geminiModels()) {
-    let r;
-    try {
-      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-        method: "POST",
-        headers: { "x-goog-api-key": key, "content-type": "application/json" },
-        body,
-      });
-    } catch {
-      throw fail("ai_unreachable", "Couldn't reach the Gemini API.");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await sleep(attempt * 2000);
+      let r;
+      try {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: "POST",
+          headers: { "x-goog-api-key": key, "content-type": "application/json" },
+          body,
+        });
+      } catch {
+        errors.push(fail("ai_unreachable", "Couldn't reach the Gemini API."));
+        continue;
+      }
+      const j = await r.json().catch(() => ({}));
+      const msg = (j.error && j.error.message) || `Gemini API error ${r.status}`;
+      if (r.ok) {
+        const cand = (j.candidates || [])[0];
+        if (!cand) throw fail("ai_error", (j.promptFeedback && `Blocked: ${j.promptFeedback.blockReason}`) || "Gemini returned no answer.");
+        const text = ((cand.content && cand.content.parts) || []).filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("\n");
+        if (!text) throw fail("ai_error", `Gemini returned an empty answer (${cand.finishReason || "unknown reason"}).`);
+        return text;
+      }
+      if (r.status === 401 || r.status === 403 || /api key/i.test(msg)) throw fail("bad_ai_key", msg);
+      if (r.status === 404) { errors.push(fail("model_missing", `${model}: ${msg}`)); break; }
+      if (r.status === 429) { errors.push(fail("rate_limited", `${model}: ${msg}`, 429)); break; }
+      if (r.status === 500 || r.status === 503 || r.status === 504) { errors.push(fail("overloaded", `${model}: ${msg}`)); continue; }
+      throw fail("ai_error", `${model}: ${msg}`);
     }
-    const j = await r.json().catch(() => ({}));
-    const msg = (j.error && j.error.message) || `Gemini API error ${r.status}`;
-    if (!r.ok) {
-      const bad = r.status === 401 || r.status === 403 || /api key/i.test(msg);
-      if (bad) throw fail("bad_ai_key", msg);
-      // Model missing, busy, over its quota or failing: try the next model.
-      if (r.status === 404) lastError = fail("ai_error", `Gemini model "${model}" isn't available: ${msg}`);
-      else if (r.status === 429) lastError = fail("rate_limited", `${model}: ${msg}`, 429);
-      else if (r.status === 503 || r.status === 500 || r.status === 504) lastError = fail("overloaded", `${model}: ${msg}`);
-      else throw fail("ai_error", `${model}: ${msg}`);
-      continue;
-    }
-    const cand = (j.candidates || [])[0];
-    if (!cand) throw fail("ai_error", (j.promptFeedback && `Blocked: ${j.promptFeedback.blockReason}`) || "Gemini returned no answer.");
-    const text = ((cand.content && cand.content.parts) || []).filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("\n");
-    if (!text) throw fail("ai_error", `Gemini returned an empty answer (${cand.finishReason || "unknown reason"}).`);
-    return text;
   }
-  throw lastError || fail("ai_error", "No Gemini model was available.");
+  // Report the most useful reason: a real problem beats "model not available".
+  const best = errors.find((e) => e.code === "rate_limited") || errors.find((e) => e.code === "overloaded") || errors.find((e) => e.code !== "model_missing") || errors[0];
+  if (best && best.code === "model_missing") best.code = "ai_error";
+  throw best || fail("ai_error", "No Gemini model was available.");
 }
 
 async function askClaude(key, { system, past, message, images }) {

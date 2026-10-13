@@ -60,7 +60,7 @@ Open the link on your phone and enter the password once.
 Edit a file on GitHub and commit; Vercel redeploys automatically. After changing an environment variable in Vercel, redeploy so it takes effect.
 
 ## Optional settings
-- `GEMINI_MODEL`: which Gemini model to use. If not set, the app tries `gemini-3.8-flash`, then `gemini-flash-latest`, then `gemini-2.5-flash`.
+- `GEMINI_MODEL`: which Gemini model to use. If not set, the app uses `gemini-3.8-flash` (retrying when busy), then `gemini-flash-latest`.
 - `ANTHROPIC_API_KEY` (and optional `ANTHROPIC_MODEL`): use Claude instead. Only used when `GEMINI_API_KEY` is not set.
 
 ## If something doesn't work
