@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Semester Week Planner</title>
+<meta name="theme-color" content="#3447d1">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Planner">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}
+/* Layout: a timetable app — top bar with week navigation, a "next up" strip,
+   the week (hour grid on wide screens, day agenda on phones), and an assistant panel. */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --ink:#16202c; --muted:#5d6878; --line:#dde2ea;
+  --accent:#3447d1; --accent-ink:#ffffff;
+  --class:#2d68d6; --shift:#b9730f; --exam:#c23a35; --task:#23865a; --other:#7656c4;
+  --font-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body:"Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --hour:46px; --radius:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e131a; --surface:#161d27; --ink:#e6ebf2; --muted:#95a1b2; --line:#26303e;
+  --accent:#8f9cff; --accent-ink:#0e131a;
+  --class:#6f9cf2; --shift:#e0a447; --exam:#f07b75; --task:#5cc893; --other:#ab92f0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e131a; --surface:#161d27; --ink:#e6ebf2; --muted:#95a1b2; --line:#26303e;
+  --accent:#8f9cff; --accent-ink:#0e131a;
+  --class:#6f9cf2; --shift:#e0a447; --exam:#f07b75; --task:#5cc893; --other:#ab92f0; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:14px 40px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:16px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+h1{font-size:1.45rem;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.05rem;font-weight:700}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{color:var(--exam)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:.82em}
+.muted{color:var(--muted)}
+
+/* top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.top .brand{display:grid;gap:2px}
+.top .brand small{color:var(--muted);font-size:.85rem}
+.weeknav{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.weeknav .label{font-weight:600;min-width:12ch;text-align:center}
+.status{font-size:.8rem;color:var(--muted)}
+
+/* next up strip */
+.next{display:flex;flex-wrap:wrap;gap:10px}
+.chipcard{flex:1 1 220px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;display:grid;gap:2px}
+.chipcard .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.chipcard .t{font-weight:600}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+@media (max-width:1000px){.main{grid-template-columns:minmax(0,1fr)}}
+
+/* week grid */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);min-width:0}
+.grid-scroll{overflow-x:auto}
+.grid{display:grid;grid-template-columns:52px repeat(7,minmax(96px,1fr));min-width:760px}
+.dayhead{padding:10px 8px;border-bottom:1px solid var(--line);font-size:.85rem;display:flex;gap:6px;align-items:baseline}
+.dayhead b{font-weight:600}
+.dayhead.today b{color:var(--accent)}
+.dayhead.today .d{background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:0 7px}
+.hours{position:relative}
+.hours div{height:var(--hour);font-family:var(--font-mono);font-size:.7rem;color:var(--muted);text-align:right;padding-right:6px;transform:translateY(-.55em)}
+.col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(var(--line) 1px,transparent 1px);background-size:100% var(--hour)}
+.col.today{background-color:color-mix(in srgb,var(--accent) 5%,transparent)}
+.nowline{position:absolute;left:0;right:0;height:2px;background:var(--exam);z-index:3}
+.ev{position:absolute;border-radius:7px;padding:4px 6px;font-size:.76rem;line-height:1.25;overflow:hidden;text-align:left;border:0;border-left:3px solid var(--k);background:color-mix(in srgb,var(--k) 15%,var(--surface));color:var(--ink);z-index:2}
+.ev:hover{background:color-mix(in srgb,var(--k) 24%,var(--surface))}
+.ev .tt{font-weight:600;display:block}
+.ev .tm{font-family:var(--font-mono);font-size:.68rem;color:var(--muted)}
+
+/* agenda (phones) */
+.agenda{display:none;padding:4px 0}
+.aday{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.aday:last-child{border-bottom:0}
+.aday h3{font-size:.95rem}
+.aday.today h3{color:var(--accent)}
+.arow{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start;width:100%;text-align:left;border:0;background:color-mix(in srgb,var(--k) 11%,var(--surface));border-left:3px solid var(--k);border-radius:8px;padding:8px 10px}
+.arow .tt{font-weight:600}
+.arow .sub{font-size:.8rem;color:var(--muted)}
+.empty{font-size:.85rem;color:var(--muted)}
+@media (max-width:720px){.grid-scroll{display:none}.agenda{display:block}}
+
+.kind{display:inline-block;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--k)}
+.k-class{--k:var(--class)}.k-shift{--k:var(--shift)}.k-exam{--k:var(--exam)}.k-task{--k:var(--task)}.k-other{--k:var(--other)}
+
+/* assistant */
+.side{display:grid;gap:16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:1000px){.side{position:static}}
+.assist{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto}
+.aistate{margin:10px 14px 0;padding:10px 12px;border-radius:9px;font-size:.84rem;background:color-mix(in srgb,var(--shift) 14%,var(--surface));display:grid;gap:8px}
+.aistate .row{display:flex;gap:8px;flex-wrap:wrap}
+.fab{display:none;position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:5;border-radius:999px;padding:11px 16px;box-shadow:0 4px 14px color-mix(in srgb,#000 22%,transparent)}
+@media (max-width:1000px){.fab{display:inline-flex}}
+.drop{outline:2px dashed var(--accent);outline-offset:-6px}
+.assist header{padding:12px 14px;border-bottom:1px solid var(--line);display:grid;gap:2px}
+.log{padding:12px 14px;display:grid;gap:10px;max-height:420px;overflow-y:auto;align-content:start}
+.msg{padding:9px 11px;border-radius:9px;font-size:.88rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.me{background:color-mix(in srgb,var(--accent) 12%,var(--surface));justify-self:end;max-width:90%}
+.msg.ai{background:var(--bg);max-width:95%}
+.msg.err{background:color-mix(in srgb,var(--exam) 12%,var(--surface))}
+.ops{border:1px solid var(--line);border-radius:9px;padding:10px;display:grid;gap:6px;font-size:.84rem}
+.ops ul{margin:0;padding-left:18px;display:grid;gap:3px}
+.ops .acts{display:flex;gap:8px;flex-wrap:wrap}
+.compose{border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:8px}
+.compose textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg);color:var(--ink);font:inherit;font-size:.9rem}
+.compose .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}
+.thumbs figure{margin:0;position:relative}
+.thumbs img{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.thumbs button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:.7rem;line-height:1;padding:0}
+.hint{font-size:.78rem;color:var(--muted)}
+.examples{display:flex;flex-wrap:wrap;gap:6px}
+.examples button{border:1px dashed var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:.78rem;color:var(--muted)}
+.examples button:hover{color:var(--ink);border-color:var(--muted)}
+
+.tools{padding:12px 14px;display:grid;gap:8px}
+.tools .row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* editor */
+.sheet{position:fixed;inset:0;background:color-mix(in srgb,#000 40%,transparent);display:grid;place-items:center;padding:16px;z-index:10}
+.sheet form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;width:min(520px,100%);max-height:calc(100% - 20px);overflow-y:auto;display:grid;gap:12px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fields .full{grid-column:1/-1}
+@media (max-width:480px){.fields{grid-template-columns:1fr}}
+label{display:grid;gap:4px;font-size:.8rem;font-weight:500;color:var(--muted)}
+input,select,textarea{font:inherit;font-size:.92rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days label{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:6px;padding:4px 7px;color:var(--ink);font-size:.82rem}
+.sheet .acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:.88rem;z-index:20;display:flex;gap:10px;align-items:center}
+.toast button{background:transparent;border:0;color:inherit;text-decoration:underline;font-weight:600}
+@media (prefers-reduced-motion:no-preference){.ev,.arow{transition:background .15s}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <h1>Semester Week Planner</h1>
+      <small id="status" class="status">Loading your schedule…</small>
+    </div>
+    <div class="weeknav">
+      <button class="btn" id="prev" aria-label="Previous week">←</button>
+      <span class="label" id="weeklabel">—</span>
+      <button class="btn" id="next" aria-label="Next week">→</button>
+      <button class="btn" id="today">This week</button>
+      <button class="btn primary" id="add">+ Add</button>
+      <button class="btn ghost" id="lock" title="Sign out on this device">Sign out</button>
+    </div>
+  </div>
+
+  <div class="next" id="nextup"></div>
+
+  <div class="main">
+    <section class="panel" aria-label="Week">
+      <div class="grid-scroll"><div class="grid" id="grid"></div></div>
+      <div class="agenda" id="agenda"></div>
+    </section>
+
+    <aside class="side">
+      <section class="panel assist" aria-label="Assistant">
+        <header>
+          <h2>Ask the planner</h2>
+          <span class="hint">Upload a timetable or roster screenshot, or type a change. You review every change before it's saved.</span>
+        </header>
+        <div class="aistate" id="aistate" hidden></div>
+        <div class="log" id="log" aria-live="polite"></div>
+        <div class="compose">
+          <div class="examples" id="examples">
+            <button type="button">Add a Friday shift 15:00–24:00 every week</button>
+            <button type="button">No classes on Dec 23 – Jan 6, holidays</button>
+            <button type="button">Plan 2 hours of study for Algorithmische Methoden before each exercise</button>
+          </div>
+          <div class="thumbs" id="thumbs"></div>
+          <textarea id="prompt" placeholder="e.g. My shift on Friday moved to 16:00–23:00 this week only"></textarea>
+          <div class="row">
+            <button class="btn primary" id="send">Send</button>
+            <button class="btn" id="attach">Add screenshot</button>
+            <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+            <button class="btn ghost" id="stop" hidden>Stop</button>
+          </div>
+          <span class="hint" id="aihint">On a computer you can also paste or drag a screenshot here.</span>
+        </div>
+      </section>
+
+      <section class="panel tools" aria-label="Phone calendar">
+        <h2>Put it on your phone</h2>
+        <span class="hint">Install it like an app: in Safari tap Share → Add to Home Screen, or in Chrome tap ⋮ → Add to Home screen. You can also send your week to Google, Apple or Outlook calendar with a calendar file.</span>
+        <div class="row">
+          <button class="btn" id="ics">Download calendar file (.ics)</button>
+          <button class="btn ghost" id="backup">Save backup</button>
+          <button class="btn ghost" id="restore">Restore backup</button>
+          <input type="file" id="restorefile" accept=".json,application/json" hidden>
+        </div>
+        <span class="hint" id="icshint"></span>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <form id="form" novalidate>
+    <h2 id="formtitle">Edit event</h2>
+    <div class="fields">
+      <label class="full">Title<input id="f-title" required></label>
+      <label>Type<select id="f-kind"><option value="class">Class</option><option value="shift">Work shift</option><option value="exam">Exam</option><option value="task">Task / study</option><option value="other">Other</option></select></label>
+      <label>Repeats<select id="f-repeat"><option value="weekly">Every week</option><option value="once">One time</option></select></label>
+      <div class="full" id="f-dayswrap"><label>Days</label><div class="days" id="f-days"></div></div>
+      <label id="f-datewrap">Date<input type="date" id="f-date"></label>
+      <label id="f-fromwrap">From<input type="date" id="f-from"></label>
+      <label id="f-untilwrap">Until<input type="date" id="f-until"></label>
+      <label>Start<input type="time" id="f-start" required></label>
+      <label>End<input type="time" id="f-end" required></label>
+      <label class="full">Room / place<input id="f-location"></label>
+      <label class="full">Note<input id="f-note"></label>
+    </div>
+    <div class="acts">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn danger" id="f-delete">Delete</button>
+        <button type="button" class="btn" id="f-skip">Skip this week only</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn" id="f-cancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+<button class="btn primary fab" id="fab">Ask AI · add screenshot</button>
+<div class="toast" id="toast" hidden><span id="toastmsg"></span><button id="toastundo" hidden>Undo</button></div>
+
+<div class="sheet" id="passsheet" hidden>
+  <form id="passform" novalidate>
+    <h2>Unlock your planner</h2>
+    <p class="muted" style="margin:0">Enter the password you set as APP_PASSWORD in Vercel. It stays saved on this device.</p>
+    <label>Password<input type="password" id="passinput" autocomplete="current-password"></label>
+    <p id="passerr" hidden style="margin:0;color:var(--exam)">That password didn't work. Try again.</p>
+    <div class="acts" style="justify-content:flex-end"><button type="submit" class="btn primary">Unlock</button></div>
+  </form>
+</div>
+<script>
+
+const DAYN=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const DAYL=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const KINDS={class:"Class",shift:"Shift",exam:"Exam",task:"Task",other:"Other"};
+const GRID_START=6, GRID_END=24;
+const $=id=>document.getElementById(id);
+
+let events=[], loaded=false;
+let weekStart=mondayOf(new Date()), editing=null, editDate=null;
+let images=[], history=[], pending=null, undoState=null, abortCtl=null;
+
+/* ---------- dates ---------- */
+function pad(n){return String(n).padStart(2,"0")}
+function iso(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function parse(s){const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());const w=(x.getDay()+6)%7;return addDays(x,-w)}
+function isoDow(d){return ((d.getDay()+6)%7)+1}
+function mins(t){if(!t)return 0;const [h,m]=t.split(":").map(Number);return h*60+(m||0)}
+function fmtDate(d){return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
+
+/* ---------- model ---------- */
+function uid(){return "e"+Math.random().toString(36).slice(2,9)}
+function clean(e){
+  const o={id:e.id||uid(),title:String(e.title||"Untitled").slice(0,120),kind:KINDS[e.kind]?e.kind:"other",
+    repeat:e.repeat==="once"?"once":"weekly",start:normTime(e.start)||"09:00",end:normTime(e.end)||"10:00",
+    location:e.location?String(e.location).slice(0,80):"",note:e.note?String(e.note).slice(0,200):""};
+  if(o.repeat==="weekly"){
+    o.days=[...new Set((Array.isArray(e.days)?e.days:[e.days]).map(Number).filter(n=>n>=1&&n<=7))].sort();
+    if(!o.days.length)o.days=[1];
+    o.from=validDate(e.from)||iso(new Date());o.until=validDate(e.until)||"";
+    o.skip=Array.isArray(e.skip)?e.skip.filter(validDate):[];
+  } else o.date=validDate(e.date)||iso(new Date());
+  return o;
+}
+function normTime(t){if(typeof t!=="string")return null;const m=t.match(/^(\d{1,2}):(\d{2})/);if(!m)return null;const h=Math.min(24,+m[1]);return pad(h)+":"+(h===24?"00":m[2])}
+function validDate(s){return typeof s==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(s)?s:null}
+function occursOn(e,d){
+  const s=iso(d);
+  if(e.repeat==="once")return e.date===s;
+  if(!e.days.includes(isoDow(d)))return false;
+  if(e.from&&s<e.from)return false;
+  if(e.until&&s>e.until)return false;
+  return !(e.skip||[]).includes(s);
+}
+function dayEvents(d){return events.filter(e=>occursOn(e,d)).sort((a,b)=>mins(a.start)-mins(b.start))}
+function describe(e){
+  const t=e.start+"–"+e.end;
+  if(e.repeat==="once")return fmtDate(parse(e.date))+" · "+t;
+  return e.days.map(n=>DAYN[n-1]).join(", ")+" · "+t+" · weekly"+(e.until?" until "+fmtDate(parse(e.until)):"");
+}
+
+/* ---------- render ---------- */
+function render(){
+  const end=addDays(weekStart,6);
+  $("weeklabel").textContent=fmtDate(weekStart)+" – "+fmtDate(end);
+  renderGrid();renderAgenda();renderNext();
+}
+function lanes(list){
+  const out=[];let group=[],groupEnd=-1;
+  const flush=()=>{const cols=[];group.forEach(e=>{let c=0;while(cols[c]&&cols[c]>mins(e.start))c++;cols[c]=Math.max(mins(e.end),mins(e.start)+15);out.push({e,c})});const n=cols.length;out.slice(-group.length).forEach(o=>o.n=n);group=[];};
+  list.forEach(e=>{if(group.length&&mins(e.start)>=groupEnd){flush();groupEnd=-1}group.push(e);groupEnd=Math.max(groupEnd,mins(e.end))});
+  if(group.length)flush();return out;
+}
+function renderGrid(){
+  const g=$("grid");g.textContent="";
+  const todayS=iso(new Date());
+  g.appendChild(document.createElement("div"));
+  for(let i=0;i<7;i++){const d=addDays(weekStart,i);const h=document.createElement("div");h.className="dayhead"+(iso(d)===todayS?" today":"");
+    h.innerHTML=`<b>${DAYN[i]}</b><span class="d mono">${d.getDate()}</span>`;g.appendChild(h)}
+  const hrs=document.createElement("div");hrs.className="hours";
+  for(let h=GRID_START;h<GRID_END;h++){const x=document.createElement("div");x.textContent=pad(h)+":00";hrs.appendChild(x)}
+  g.appendChild(hrs);
+  const hourPx=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hour"))||46;
+  const total=(GRID_END-GRID_START)*hourPx;
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i);const col=document.createElement("div");col.className="col"+(iso(d)===todayS?" today":"");col.style.height=total+"px";
+    lanes(dayEvents(d)).forEach(({e,c,n})=>{
+      const s=Math.max(mins(e.start),GRID_START*60),en=Math.min(Math.max(mins(e.end),s+20),GRID_END*60);
+      const b=document.createElement("button");b.className="ev k-"+e.kind;
+      b.style.top=((s-GRID_START*60)/60*hourPx)+"px";b.style.height=Math.max(20,(en-s)/60*hourPx-2)+"px";
+      b.style.left=`calc(${c/n*100}% + 2px)`;b.style.width=`calc(${100/n}% - 4px)`;
+      const tt=document.createElement("span");tt.className="tt";tt.textContent=e.title;
+      const tm=document.createElement("span");tm.className="tm";tm.textContent=e.start+"–"+e.end+(e.location?" · "+e.location:"");
+      b.append(tt,tm);b.title=e.title+" · "+e.start+"–"+e.end;b.onclick=()=>openEditor(e,d);col.appendChild(b);
+    });
+    if(iso(d)===todayS){const now=new Date();const m=now.getHours()*60+now.getMinutes();if(m>=GRID_START*60&&m<=GRID_END*60){const l=document.createElement("div");l.className="nowline";l.style.top=((m-GRID_START*60)/60*hourPx)+"px";col.appendChild(l)}}
+    g.appendChild(col);
+  }
+}
+function renderAgenda(){
+  const a=$("agenda");a.textContent="";const todayS=iso(new Date());
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i);const list=dayEvents(d);
+    const s=document.createElement("div");s.className="aday"+(iso(d)===todayS?" today":"");
+    const h=document.createElement("h3");h.textContent=DAYL[i]+", "+fmtDate(d)+(iso(d)===todayS?" · today":"");s.appendChild(h);
+    if(!list.length){const p=document.createElement("div");p.className="empty";p.textContent="Free day";s.appendChild(p)}
+    list.forEach(e=>{const r=document.createElement("button");r.className="arow k-"+e.kind;
+      r.innerHTML=`<span class="mono"></span><span><span class="kind"></span><div class="tt"></div><div class="sub"></div></span>`;
+      r.querySelector(".mono").textContent=e.start+"–"+e.end;r.querySelector(".kind").textContent=KINDS[e.kind];
+      r.querySelector(".tt").textContent=e.title;r.querySelector(".sub").textContent=[e.location,e.note].filter(Boolean).join(" · ");
+      r.onclick=()=>openEditor(e,d);s.appendChild(r)});
+    a.appendChild(s);
+  }
+}
+function renderNext(){
+  const box=$("nextup");box.textContent="";
+  const now=new Date();const nowM=now.getHours()*60+now.getMinutes();
+  let current=null,upcoming=[];
+  for(let i=0;i<14&&upcoming.length<2;i++){const d=addDays(new Date(now.getFullYear(),now.getMonth(),now.getDate()),i);
+    dayEvents(d).forEach(e=>{if(i===0&&mins(e.start)<=nowM&&mins(e.end)>nowM)current={e,d};else if(i>0||mins(e.start)>nowM)upcoming.push({e,d})})}
+  const card=(eyebrow,o)=>{const c=document.createElement("div");c.className="chipcard k-"+o.e.kind;
+    const dayTxt=iso(o.d)===iso(now)?"Today":iso(o.d)===iso(addDays(now,1))?"Tomorrow":DAYL[(o.d.getDay()+6)%7]+" "+fmtDate(o.d);
+    c.innerHTML=`<span class="eyebrow"></span><span class="t"></span><span class="muted"></span>`;
+    c.querySelector(".eyebrow").textContent=eyebrow;c.querySelector(".t").textContent=o.e.title;
+    c.querySelector(".muted").textContent=dayTxt+" · "+o.e.start+"–"+o.e.end+(o.e.location?" · "+o.e.location:"");box.appendChild(c)};
+  if(current)card("Happening now",current);
+  upcoming.slice(0,current?1:2).forEach((o,i)=>card(i===0&&!current?"Next up":"After that",o));
+  if(!box.children.length){const c=document.createElement("div");c.className="chipcard";
+    c.innerHTML=`<span class="eyebrow">Nothing scheduled</span><span class="t">Your week is empty</span><span class="muted">Upload a timetable screenshot in the assistant, or tap + Add.</span>`;box.appendChild(c)}
+}
+
+/* ---------- storage ---------- */
+let pass="";try{pass=localStorage.getItem("planner.pass")||""}catch(_){}
+let serverSync=false;
+function setStatus(t){$("status").textContent=t}
+function cacheLocal(){try{localStorage.setItem("planner.events",JSON.stringify(events))}catch(_){}}
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{"content-type":"application/json","x-planner-password":pass}});
+  let j=null;try{j=await r.json()}catch(_){}
+  if(!r.ok){const err=new Error((j&&j.error)||("Server error "+r.status));err.status=r.status;err.code=j&&j.code;throw err}
+  return j;
+}
+async function save(next,msg){
+  undoState=events;events=next.map(clean);render();cacheLocal();
+  if(!serverSync){toast(msg||"Saved",true);setStatus("Saved on this device");return}
+  try{await api("/api/schedule",{method:"PUT",body:JSON.stringify({events})});toast(msg||"Saved",true);setStatus("Saved · synced to all your devices")}
+  catch(e){if(e.status===401)askPassword();toast("Saved here, but couldn't sync: "+e.message);setStatus("Saved on this device · not synced yet")}
+}
+async function loadSchedule(){
+  try{const s=localStorage.getItem("planner.events");if(s)events=JSON.parse(s).map(clean)}catch(_){}
+  loaded=true;render();
+  if(!pass){askPassword();setStatus("Enter your planner password to start");return}
+  try{
+    const j=await api("/api/schedule");serverSync=true;
+    if(Array.isArray(j.events)){events=j.events.map(clean);cacheLocal();render()}
+    else if(events.length){await api("/api/schedule",{method:"PUT",body:JSON.stringify({events})})}
+    setStatus(events.length?"Synced · "+events.length+" items in your schedule":"Your schedule is empty");
+  }catch(e){
+    if(e.status===401){askPassword(true);setStatus("Enter your planner password to sync")}
+    else if(e.code==="no_storage"){setStatus("Saved on this device only. Connect storage in Vercel to sync phone and computer.")}
+    else if(e.code==="no_password"){setStatus("Set APP_PASSWORD in your Vercel project, then reload.")}
+    else setStatus("Offline · showing your saved copy")
+  }
+}
+// pick up changes made on another device
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState!=="visible"||!serverSync||!$("sheet").hidden||pending)return;
+  try{const j=await api("/api/schedule");if(Array.isArray(j.events)){events=j.events.map(clean);cacheLocal();render()}}catch(_){}
+});
+
+/* ---------- password ---------- */
+function askPassword(wrong){$("passsheet").hidden=false;$("passerr").hidden=!wrong;$("passinput").value="";setTimeout(()=>$("passinput").focus(),50)}
+$("passform").onsubmit=ev=>{ev.preventDefault();const v=$("passinput").value;if(!v){$("passinput").focus();return}
+  pass=v;try{localStorage.setItem("planner.pass",v)}catch(_){}
+  $("passsheet").hidden=true;$("aistate").hidden=true;loadSchedule()};
+$("lock").onclick=()=>{pass="";try{localStorage.removeItem("planner.pass")}catch(_){}serverSync=false;askPassword()};
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg,undo){$("toastmsg").textContent=msg;$("toastundo").hidden=!(undo&&undoState);$("toast").hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("toast").hidden=true,6000)}
+$("toastundo").onclick=()=>{if(!undoState)return;const u=undoState;undoState=null;save(u,"Change undone");$("toastundo").hidden=true};
+
+/* ---------- editor ---------- */
+(function(){const w=$("f-days");DAYN.forEach((n,i)=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" value="${i+1}" id="f-day${i+1}"> ${n}`;w.appendChild(l)})})();
+function syncRepeat(){const once=$("f-repeat").value==="once";$("f-dayswrap").hidden=once;$("f-fromwrap").hidden=once;$("f-untilwrap").hidden=once;$("f-datewrap").hidden=!once}
+$("f-repeat").onchange=syncRepeat;
+function openEditor(e,d){
+  editing=e?e.id:null;editDate=d?iso(d):null;
+  const x=e||{title:"",kind:"task",repeat:"once",date:iso(d||new Date()),start:"14:00",end:"15:00",days:[isoDow(d||new Date())],from:iso(weekStart),until:""};
+  $("formtitle").textContent=e?"Edit "+KINDS[x.kind].toLowerCase():"Add to your schedule";
+  $("f-title").value=x.title;$("f-kind").value=x.kind;$("f-repeat").value=x.repeat;
+  $("f-date").value=x.date||editDate||iso(new Date());$("f-from").value=x.from||iso(weekStart);$("f-until").value=x.until||"";
+  $("f-start").value=x.start==="24:00"?"23:59":x.start;$("f-end").value=x.end==="24:00"?"23:59":x.end;
+  $("f-location").value=x.location||"";$("f-note").value=x.note||"";
+  for(let i=1;i<=7;i++)$("f-day"+i).checked=(x.days||[]).includes(i);
+  $("f-delete").hidden=!e;$("f-skip").hidden=!(e&&e.repeat==="weekly"&&editDate);
+  syncRepeat();$("sheet").hidden=false;$("f-title").focus();
+}
+function closeEditor(){$("sheet").hidden=true;editing=null}
+$("f-cancel").onclick=closeEditor;
+$("sheet").addEventListener("click",ev=>{if(ev.target.id==="sheet")closeEditor()});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("sheet").hidden)closeEditor()});
+$("form").onsubmit=ev=>{ev.preventDefault();
+  if(!$("f-title").value.trim()){$("f-title").focus();return}
+  const fixEnd=t=>t==="23:59"?"24:00":t;
+  const o={id:editing||uid(),title:$("f-title").value.trim(),kind:$("f-kind").value,repeat:$("f-repeat").value,
+    date:$("f-date").value,from:$("f-from").value,until:$("f-until").value,start:$("f-start").value,end:fixEnd($("f-end").value),
+    location:$("f-location").value.trim(),note:$("f-note").value.trim(),
+    days:[1,2,3,4,5,6,7].filter(i=>$("f-day"+i).checked),skip:(events.find(e=>e.id===editing)||{}).skip||[]};
+  const next=editing?events.map(e=>e.id===editing?o:e):[...events,o];closeEditor();save(next,editing?"Saved changes":"Added "+o.title);
+};
+$("f-delete").onclick=()=>{const e=events.find(x=>x.id===editing);closeEditor();save(events.filter(x=>x.id!==e.id),"Deleted "+e.title)};
+$("f-skip").onclick=()=>{const id=editing,d=editDate;closeEditor();save(events.map(e=>e.id===id?{...e,skip:[...(e.skip||[]),d]}:e),"Skipped on "+fmtDate(parse(d)))};
+$("add").onclick=()=>openEditor(null,new Date()>=weekStart&&new Date()<addDays(weekStart,7)?new Date():weekStart);
+$("prev").onclick=()=>{weekStart=addDays(weekStart,-7);render()};
+$("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
+$("today").onclick=()=>{weekStart=mondayOf(new Date());render()};
+
+/* ---------- assistant ---------- */
+function addMsg(cls,text){const m=document.createElement("div");m.className="msg "+cls;m.textContent=text;$("log").appendChild(m);$("log").scrollTop=$("log").scrollHeight;return m}
+function renderThumbs(){const t=$("thumbs");t.textContent="";images.forEach((f,i)=>{const fig=document.createElement("figure");const img=document.createElement("img");img.alt="Attached screenshot "+(i+1);img.src=URL.createObjectURL(f);const x=document.createElement("button");x.type="button";x.textContent="✕";x.setAttribute("aria-label","Remove screenshot");x.onclick=()=>{images.splice(i,1);renderThumbs()};fig.append(img,x);t.appendChild(fig)})}
+function addImages(list){const lim={maxCount:4};for(const f of list){if(!f.type.startsWith("image/"))continue;if(lim&&images.length>=lim.maxCount){addMsg("err","You can attach up to "+lim.maxCount+" screenshots at a time.");break}images.push(f)}renderThumbs()}
+$("attach").onclick=()=>$("file").click();
+$("fab").onclick=()=>{document.querySelector(".assist").scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("prompt").focus(),400)};
+const asst=document.querySelector(".assist");
+asst.addEventListener("dragover",e=>{e.preventDefault();asst.classList.add("drop")});
+asst.addEventListener("dragleave",()=>asst.classList.remove("drop"));
+asst.addEventListener("drop",e=>{e.preventDefault();asst.classList.remove("drop");addImages(e.dataTransfer.files)});
+$("file").onchange=e=>{addImages(e.target.files);e.target.value=""};
+$("prompt").addEventListener("paste",e=>{const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith("image/"));if(fs.length){e.preventDefault();addImages(fs)}});
+$("examples").addEventListener("click",e=>{if(e.target.tagName==="BUTTON"){$("prompt").value=e.target.textContent;$("prompt").focus()}});
+$("prompt").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.metaKey||e.ctrlKey))send()});
+
+function instructions(){
+  const now=new Date();
+  return `You are the scheduling assistant inside a student's week planner app. Today is ${iso(now)} (${DAYL[(now.getDay()+6)%7]}), time ${pad(now.getHours())}:${pad(now.getMinutes())}, timezone Europe/Berlin. The student studies at a German university and also works shifts.
+The user may attach screenshots (university timetable, work roster, to-do list, exam list) and/or type a request.
+
+CURRENT SCHEDULE (JSON): ${JSON.stringify(events)}
+
+Event fields: id (existing events only), title, kind ("class"|"shift"|"exam"|"task"|"other"), repeat ("weekly"|"once"), days (ISO weekdays, 1=Mon … 7=Sun; weekly only), date (YYYY-MM-DD; once only), from and until (YYYY-MM-DD; weekly only), start and end ("HH:MM", 24-hour; "24:00" means midnight), location, note, skip (array of YYYY-MM-DD dates on which a weekly event does not happen).
+
+Rules:
+- Times marked "c.t." start 15 minutes after and end 15 minutes before the printed times (10:00–12:00 c.t. becomes 10:15–11:45). "s.t." means the exact times.
+- Use the course name as title without the course number; put the number, type (Lecture, Exercise, Seminar, Kolloquium) and group in note.
+- Never duplicate an event that is already in the schedule; update it instead.
+- A weekly event with no visible end date: until = end of the current lecture period (winter semester about mid-February, summer semester about late July). Say so in reply.
+- A cancelled single date of a weekly event goes into skip.
+- When asked to plan tasks or study time, place them in free gaps that do not overlap anything, between 08:00 and 22:00, as once events (kind "task").
+- An event ending after midnight ends at "24:00".
+- If a request is ambiguous (for example "3 to 12" could mean 03:00–12:00 or 15:00–24:00), choose the reading that does not clash with existing events and say which you chose. If you truly cannot tell, ask a short question and return no ops.
+- If the user just asks a question about their schedule, answer it in reply and return no ops.
+
+Respond with ONLY a JSON object:
+{"reply":"one to three short plain sentences to the student","ops":[{"op":"add","event":{...}},{"op":"update","id":"<existing id>","changes":{...}},{"op":"delete","id":"<existing id>"}]}`;
+}
+function opLine(o){
+  if(o.op==="add")return "Add · "+o.event.title+" · "+describe(o.event);
+  const e=events.find(x=>x.id===o.id);if(!e)return null;
+  if(o.op==="delete")return "Remove · "+e.title+" · "+describe(e);
+  const merged=clean({...e,...o.changes,id:e.id});return "Change · "+e.title+" → "+describe(merged)+(o.changes.title&&o.changes.title!==e.title?" (renamed "+merged.title+")":"");
+}
+function normalizeOps(ops){
+  if(!Array.isArray(ops))return [];
+  return ops.map(o=>{
+    if(o&&o.op==="add"&&o.event)return {op:"add",event:clean({...o.event,id:uid()})};
+    if(o&&o.op==="update"&&o.id&&o.changes&&events.some(e=>e.id===o.id))return {op:"update",id:o.id,changes:o.changes};
+    if(o&&o.op==="delete"&&o.id&&events.some(e=>e.id===o.id))return {op:"delete",id:o.id};
+    return null}).filter(Boolean);
+}
+function applyOps(ops){
+  let next=[...events];
+  ops.forEach(o=>{if(o.op==="add")next.push(o.event);else if(o.op==="delete")next=next.filter(e=>e.id!==o.id);else next=next.map(e=>e.id===o.id?clean({...e,...o.changes,id:e.id}):e)});
+  return next;
+}
+function showOps(ops){
+  const box=document.createElement("div");box.className="ops";
+  const h=document.createElement("b");h.textContent=ops.length===1?"1 change ready":ops.length+" changes ready";
+  const ul=document.createElement("ul");ops.forEach(o=>{const l=opLine(o);if(l){const li=document.createElement("li");li.textContent=l;ul.appendChild(li)}});
+  const acts=document.createElement("div");acts.className="acts";
+  const ok=document.createElement("button");ok.className="btn primary";ok.textContent="Apply changes";
+  const no=document.createElement("button");no.className="btn";no.textContent="Discard";
+  ok.onclick=()=>{if(pending!==ops)return;pending=null;box.querySelector(".acts").remove();const p=document.createElement("span");p.className="hint";p.textContent="Applied";box.appendChild(p);
+    const next=applyOps(ops);save(next,"Applied "+ops.length+(ops.length===1?" change":" changes"));
+    const firstAdd=ops.find(o=>o.op==="add");if(firstAdd){const d=firstAdd.event.repeat==="once"?parse(firstAdd.event.date):parse(firstAdd.event.from||iso(new Date()));if(firstAdd.event.repeat==="once"||d>addDays(weekStart,6))weekStart=mondayOf(d);render()}};
+  no.onclick=()=>{pending=null;box.querySelector(".acts").remove();const p=document.createElement("span");p.className="hint";p.textContent="Discarded";box.appendChild(p)};
+  acts.append(ok,no);box.append(h,ul,acts);$("log").appendChild(box);$("log").scrollTop=$("log").scrollHeight;pending=ops;
+}
+/* ---------- ics export ---------- */
+function icsEsc(s){return String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;")}
+function icsDT(dateS,t){let d=parse(dateS);let [h,m]=t.split(":").map(Number);if(h===24){d=addDays(d,1);h=0}return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+"T"+pad(h)+pad(m)+"00"}
+function buildICS(){
+  const BYDAY=["MO","TU","WE","TH","FR","SA","SU"];const stamp=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Semester Week Planner//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:Semester Week Planner",
+    "BEGIN:VTIMEZONE","TZID:Europe/Berlin","BEGIN:DAYLIGHT","TZOFFSETFROM:+0100","TZOFFSETTO:+0200","TZNAME:CEST","DTSTART:19700329T020000","RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU","END:DAYLIGHT",
+    "BEGIN:STANDARD","TZOFFSETFROM:+0200","TZOFFSETTO:+0100","TZNAME:CET","DTSTART:19701025T030000","RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU","END:STANDARD","END:VTIMEZONE"];
+  events.forEach(e=>{
+    let first;
+    if(e.repeat==="once")first=e.date;
+    else{let d=parse(e.from||iso(new Date()));for(let i=0;i<7&&!e.days.includes(isoDow(d));i++)d=addDays(d,1);first=iso(d);if(e.until&&first>e.until)return}
+    L.push("BEGIN:VEVENT","UID:"+e.id+"@semester-week-planner","DTSTAMP:"+stamp,"SUMMARY:"+icsEsc(e.title),
+      "DTSTART;TZID=Europe/Berlin:"+icsDT(first,e.start),"DTEND;TZID=Europe/Berlin:"+icsDT(first,mins(e.end)>mins(e.start)?e.end:"24:00"));
+    if(e.repeat==="weekly"){
+      L.push("RRULE:FREQ=WEEKLY;BYDAY="+e.days.map(n=>BYDAY[n-1]).join(",")+(e.until?";UNTIL="+e.until.replace(/-/g,"")+"T225959Z":""));
+      (e.skip||[]).forEach(s=>L.push("EXDATE;TZID=Europe/Berlin:"+icsDT(s,e.start)));
+    }
+    if(e.location)L.push("LOCATION:"+icsEsc(e.location));
+    const desc=[KINDS[e.kind],e.note].filter(Boolean).join(" · ");if(desc)L.push("DESCRIPTION:"+icsEsc(desc));
+    L.push("END:VEVENT");
+  });
+  L.push("END:VCALENDAR");return L.join("\r\n")+"\r\n";
+}
+/* ---------- ai request ---------- */
+const ERR={unauthorized:"Wrong password. Enter it again.",no_password:"The app has no password yet. Add APP_PASSWORD in Vercel → Settings → Environment Variables, then redeploy.",no_ai_key:"The AI isn't set up yet. Add ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.",bad_ai_key:"Your Anthropic API key was rejected. Check ANTHROPIC_API_KEY in Vercel.",rate_limited:"Too many requests right now. Wait a minute and try again.",overloaded:"Claude is busy right now. Try again in a minute.",too_large:"That's too much at once. Send fewer screenshots.",bad_image:"That screenshot couldn't be read. Try a PNG or JPG."};
+function shrink(file){return new Promise((resolve,reject)=>{
+  const url=URL.createObjectURL(file);const img=new Image();
+  img.onload=()=>{const max=1800;let w=img.naturalWidth,h=img.naturalHeight;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);
+    const c=document.createElement("canvas");c.width=w;c.height=h;const ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+    resolve({media_type:"image/jpeg",data:c.toDataURL("image/jpeg",.85).split(",")[1]})};
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("bad image"))};img.src=url})}
+async function send(){
+  const text=$("prompt").value.trim();
+  if(!text&&!images.length){$("prompt").focus();return}
+  if(!pass){askPassword();return}
+  const files=[...images];
+  const userTxt=(text||"Read these screenshots and add everything to my schedule.")+(files.length?` [${files.length} screenshot${files.length>1?"s":""} attached]`:"");
+  addMsg("me",userTxt);$("prompt").value="";images=[];renderThumbs();
+  const thinking=addMsg("ai","Reading"+(files.length?" your screenshot…":"…"));
+  $("send").disabled=true;$("stop").hidden=false;abortCtl=new AbortController();
+  try{
+    let imgs;try{imgs=await Promise.all(files.map(shrink))}catch(_){throw {code:"bad_image"}}
+    const out=await api("/api/plan",{method:"POST",signal:abortCtl.signal,body:JSON.stringify({system:instructions(),history:history.slice(-6),message:"STUDENT'S MESSAGE: "+userTxt,images:imgs})});
+    const reply=out.reply||"Done.";thinking.textContent=reply;
+    history.push({role:"user",content:"STUDENT'S MESSAGE: "+userTxt},{role:"assistant",content:reply});
+    const ops=normalizeOps(out.ops);if(ops.length)showOps(ops);
+  }catch(e){
+    if(e&&e.name==="AbortError"){thinking.textContent="Stopped."}
+    else{thinking.className="msg err";const c=e&&e.code;thinking.textContent=ERR[c]||("Something went wrong: "+((e&&e.message)||"unknown error")+". Try again.");
+      if(c==="unauthorized")askPassword(true);
+      if(text&&!$("prompt").value)$("prompt").value=text}
+  }finally{$("send").disabled=false;$("stop").hidden=true;abortCtl=null}
+}
+$("send").onclick=send;
+$("stop").onclick=()=>abortCtl&&abortCtl.abort();
+
+/* ---------- export & backup ---------- */
+function downloadFile(name,data,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
+$("ics").onclick=()=>{
+  if(!events.length){$("icshint").textContent="Add something to your schedule first.";return}
+  downloadFile("semester-week-planner.ics",buildICS(),"text/calendar");
+  $("icshint").textContent="Open the file to add it to your calendar. After changes, download it again; events update instead of duplicating."};
+$("backup").onclick=()=>{downloadFile("planner-backup.json",JSON.stringify({events},null,2),"application/json");$("icshint").textContent="Backup saved."};
+$("restore").onclick=()=>$("restorefile").click();
+$("restorefile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{const j=JSON.parse(await f.text());const list=Array.isArray(j)?j:j.events;if(!Array.isArray(list))throw 0;save(list,"Restored "+list.length+" items")}
+  catch(_){$("icshint").textContent="That file isn't a planner backup."}};
+
+/* ---------- boot ---------- */
+render();
+loadSchedule();
+addMsg("ai","Hi! Send me a screenshot of your timetable or shift roster and I'll add it. You can also type changes like \"move Friday's shift to 16:00\" or \"plan study time for my exam\".");
+setInterval(()=>{if($("sheet").hidden)render()},60000);
+</script>
+</body>
+</html>
