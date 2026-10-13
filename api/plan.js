@@ -82,23 +82,33 @@ async function askGemini(key, { system, past, message, images }) {
       ],
     },
   ];
-  const body = JSON.stringify({
+  const makeBody = (lowThinking) => JSON.stringify({
     system_instruction: { parts: [{ text: system }] },
     contents,
-    generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0.2 },
+    generationConfig: {
+      responseMimeType: "application/json",
+      maxOutputTokens: 8192,
+      temperature: 0.2,
+      // Reading a timetable doesn't need deep reasoning; this makes answers much faster.
+      ...(lowThinking ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
+    },
   });
+  let lowThinking = true;
+  const started = Date.now();
+  const outOfTime = () => Date.now() - started > 90_000; // stay well inside Vercel's time limit
 
   // Each model gets up to 3 tries when it's busy; then the next model is tried.
   const errors = [];
   for (const model of geminiModels()) {
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (outOfTime()) break;
       if (attempt) await sleep(attempt * 2000);
       let r;
       try {
         r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: "POST",
           headers: { "x-goog-api-key": key, "content-type": "application/json" },
-          body,
+          body: makeBody(lowThinking),
         });
       } catch {
         errors.push(fail("ai_unreachable", "Couldn't reach the Gemini API."));
@@ -114,12 +124,14 @@ async function askGemini(key, { system, past, message, images }) {
         return text;
       }
       if (r.status === 401 || r.status === 403 || /api key/i.test(msg)) throw fail("bad_ai_key", msg);
+      if (r.status === 400 && lowThinking && /thinking/i.test(msg)) { lowThinking = false; attempt--; continue; }
       if (r.status === 404) { errors.push(fail("model_missing", `${model}: ${msg}`)); break; }
       if (r.status === 429) { errors.push(fail("rate_limited", `${model}: ${msg}`, 429)); break; }
       if (r.status === 500 || r.status === 503 || r.status === 504) { errors.push(fail("overloaded", `${model}: ${msg}`)); continue; }
       throw fail("ai_error", `${model}: ${msg}`);
     }
   }
+  if (!errors.length || outOfTime()) errors.push(fail("overloaded", "Gemini took too long to answer. Try again, or send a smaller screenshot."));
   // Report the most useful reason: a real problem beats "model not available".
   const best = errors.find((e) => e.code === "rate_limited") || errors.find((e) => e.code === "overloaded") || errors.find((e) => e.code !== "model_missing") || errors[0];
   if (!best) throw fail("ai_error", "No Gemini model was available.");
