@@ -101,13 +101,15 @@ async function askGemini(key, { system, past, message, images }) {
     }
     const j = await r.json().catch(() => ({}));
     const msg = (j.error && j.error.message) || `Gemini API error ${r.status}`;
-    if (r.status === 404) { lastError = fail("ai_error", `Gemini model "${model}" isn't available: ${msg}`); continue; }
     if (!r.ok) {
       const bad = r.status === 401 || r.status === 403 || /api key/i.test(msg);
       if (bad) throw fail("bad_ai_key", msg);
-      if (r.status === 429) throw fail("rate_limited", msg, 429);
-      if (r.status === 503) throw fail("overloaded", msg);
-      throw fail("ai_error", msg);
+      // Model missing, busy, over its quota or failing: try the next model.
+      if (r.status === 404) lastError = fail("ai_error", `Gemini model "${model}" isn't available: ${msg}`);
+      else if (r.status === 429) lastError = fail("rate_limited", `${model}: ${msg}`, 429);
+      else if (r.status === 503 || r.status === 500 || r.status === 504) lastError = fail("overloaded", `${model}: ${msg}`);
+      else throw fail("ai_error", `${model}: ${msg}`);
+      continue;
     }
     const cand = (j.candidates || [])[0];
     if (!cand) throw fail("ai_error", (j.promptFeedback && `Blocked: ${j.promptFeedback.blockReason}`) || "Gemini returned no answer.");
