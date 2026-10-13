@@ -1,6 +1,11 @@
 import { checkAuth, extractJson } from "./_lib.js";
 
+// Uses Gemini when GEMINI_API_KEY is set, otherwise Claude when ANTHROPIC_API_KEY is set.
+
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+// Tried in order; the first model the API accepts is used.
+const geminiModels = () => [...new Set([process.env.GEMINI_MODEL, "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"].filter(Boolean))];
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -9,9 +14,10 @@ export default async function handler(req, res) {
   }
   if (!checkAuth(req, res)) return;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ code: "no_ai_key", error: "ANTHROPIC_API_KEY is not set in your Vercel project settings." });
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!geminiKey && !anthropicKey) {
+    return res.status(500).json({ code: "no_ai_key", error: "No AI key is set in your Vercel project settings." });
   }
 
   const { system, history = [], message, images = [] } = req.body || {};
@@ -27,7 +33,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Earlier turns as plain text, alternating user/assistant, starting with user.
+  // Earlier turns as plain text, alternating user/assistant, starting with user, ending with assistant.
   const past = [];
   for (const h of history.slice(-8)) {
     const role = h && h.role === "assistant" ? "assistant" : "user";
@@ -39,20 +45,89 @@ export default async function handler(req, res) {
   }
   if (past.length && past[past.length - 1].role === "user") past.pop();
 
+  try {
+    const text = geminiKey
+      ? await askGemini(geminiKey, { system, past, message, images })
+      : await askClaude(anthropicKey, { system, past, message, images });
+    try {
+      const out = extractJson(text);
+      return res.status(200).json({
+        reply: typeof out.reply === "string" ? out.reply : "Done.",
+        ops: Array.isArray(out.ops) ? out.ops : [],
+      });
+    } catch {
+      return res.status(200).json({ reply: text.slice(0, 1500) || "I couldn't read that. Try again.", ops: [] });
+    }
+  } catch (e) {
+    return res.status(e.httpStatus || 502).json({ code: e.code || "ai_error", error: e.message });
+  }
+}
+
+function fail(code, message, httpStatus = 502) {
+  const e = new Error(message);
+  e.code = code;
+  e.httpStatus = httpStatus;
+  return e;
+}
+
+async function askGemini(key, { system, past, message, images }) {
+  const contents = [
+    ...past.map((p) => ({ role: p.role === "assistant" ? "model" : "user", parts: [{ text: p.content }] })),
+    {
+      role: "user",
+      parts: [
+        ...images.map((img) => ({ inline_data: { mime_type: img.media_type, data: img.data } })),
+        { text: message },
+      ],
+    },
+  ];
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: system }] },
+    contents,
+    generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0.2 },
+  });
+
+  let lastError = null;
+  for (const model of geminiModels()) {
+    let r;
+    try {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "content-type": "application/json" },
+        body,
+      });
+    } catch {
+      throw fail("ai_unreachable", "Couldn't reach the Gemini API.");
+    }
+    const j = await r.json().catch(() => ({}));
+    const msg = (j.error && j.error.message) || `Gemini API error ${r.status}`;
+    if (r.status === 404) { lastError = fail("ai_error", `Gemini model "${model}" isn't available: ${msg}`); continue; }
+    if (!r.ok) {
+      const bad = r.status === 401 || r.status === 403 || /api key/i.test(msg);
+      if (bad) throw fail("bad_ai_key", msg);
+      if (r.status === 429) throw fail("rate_limited", msg, 429);
+      if (r.status === 503) throw fail("overloaded", msg);
+      throw fail("ai_error", msg);
+    }
+    const cand = (j.candidates || [])[0];
+    if (!cand) throw fail("ai_error", (j.promptFeedback && `Blocked: ${j.promptFeedback.blockReason}`) || "Gemini returned no answer.");
+    const text = ((cand.content && cand.content.parts) || []).filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("\n");
+    if (!text) throw fail("ai_error", `Gemini returned an empty answer (${cand.finishReason || "unknown reason"}).`);
+    return text;
+  }
+  throw lastError || fail("ai_error", "No Gemini model was available.");
+}
+
+async function askClaude(key, { system, past, message, images }) {
   const content = [
     ...images.map((img) => ({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } })),
     { type: "text", text: message },
   ];
-
   let r;
   try {
     r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
         max_tokens: 4096,
@@ -60,25 +135,16 @@ export default async function handler(req, res) {
         messages: [...past, { role: "user", content }],
       }),
     });
-  } catch (e) {
-    return res.status(502).json({ code: "ai_unreachable", error: "Couldn't reach the Claude API." });
+  } catch {
+    throw fail("ai_unreachable", "Couldn't reach the Claude API.");
   }
-
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = (j.error && j.error.message) || `Claude API error ${r.status}`;
-    const code = r.status === 401 ? "bad_ai_key" : r.status === 429 ? "rate_limited" : r.status === 529 ? "overloaded" : "ai_error";
-    return res.status(r.status === 429 ? 429 : 502).json({ code, error: msg });
+    if (r.status === 401) throw fail("bad_ai_key", msg);
+    if (r.status === 429) throw fail("rate_limited", msg, 429);
+    if (r.status === 529) throw fail("overloaded", msg);
+    throw fail("ai_error", msg);
   }
-
-  const text = (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-  try {
-    const out = extractJson(text);
-    return res.status(200).json({
-      reply: typeof out.reply === "string" ? out.reply : "Done.",
-      ops: Array.isArray(out.ops) ? out.ops : [],
-    });
-  } catch {
-    return res.status(200).json({ reply: text.slice(0, 1500) || "I couldn't read that. Try again.", ops: [] });
-  }
+  return (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
 }

@@ -1,6 +1,6 @@
 # Semester Week Planner
 
-Your week of classes, work shifts and tasks. Upload a screenshot of a timetable or roster, or type a change ("my Friday shift is 16:00–23:00 this week"), and Claude updates the schedule. You approve every change before it's saved. Works on phone and computer, and can be installed on your phone's home screen.
+Your week of classes, work shifts and tasks. Upload a screenshot of a timetable or roster, or type a change ("my Friday shift is 16:00–23:00 this week"), and the AI updates the schedule. You approve every change before it's saved. Works on phone and computer, and can be installed on your phone's home screen.
 
 ## What's in this folder
 
@@ -8,7 +8,7 @@ Your week of classes, work shifts and tasks. Upload a screenshot of a timetable 
 |---|---|
 | `public/index.html` | The app itself |
 | `public/manifest.webmanifest`, `public/*.png` | Lets you add the app to your phone's home screen |
-| `api/plan.js` | Sends your request and screenshots to Claude |
+| `api/plan.js` | Sends your request and screenshots to the AI (Gemini) |
 | `api/schedule.js` | Saves your schedule so phone and computer stay in sync |
 | `planner-backup.json` | Your current schedule (classes, exam, Friday shift). Not uploaded to the website. |
 
@@ -16,7 +16,7 @@ Your week of classes, work shifts and tasks. Upload a screenshot of a timetable 
 
 1. A free **Vercel** account: https://vercel.com/signup
 2. A free **GitHub** account: https://github.com/signup (easiest way to get the files to Vercel)
-3. An **Anthropic API key** for the AI: https://console.anthropic.com → API Keys → Create Key. This is separate from your Claude subscription and is billed per use; reading a screenshot costs roughly a cent or two.
+3. A **Gemini API key** for the AI: https://aistudio.google.com/apikey → Create API key. Google has a free tier that easily covers personal use.
 
 ## Deploy (no terminal needed)
 
@@ -36,7 +36,7 @@ Your week of classes, work shifts and tasks. Upload a screenshot of a timetable 
    | Name | Value |
    |---|---|
    | `APP_PASSWORD` | A password you choose. You type it once on each device. |
-   | `ANTHROPIC_API_KEY` | Your key from console.anthropic.com (starts with `sk-ant-`) |
+   | `GEMINI_API_KEY` | Your key from Google AI Studio |
 
 5. Click **Deploy**. After about a minute you get a link like `week-planner-xyz.vercel.app`.
 
@@ -60,11 +60,12 @@ Open the link on your phone and enter the password once.
 Edit a file on GitHub and commit; Vercel redeploys automatically. After changing an environment variable in Vercel, redeploy so it takes effect.
 
 ## Optional settings
-- `ANTHROPIC_MODEL`: which Claude model to use. Default `claude-sonnet-5-5`. For lower cost try `claude-haiku-5-5`.
+- `GEMINI_MODEL`: which Gemini model to use. If not set, the app tries `gemini-3.8-flash`, then `gemini-flash-latest`, then `gemini-2.5-flash`.
+- `ANTHROPIC_API_KEY` (and optional `ANTHROPIC_MODEL`): use Claude instead. Only used when `GEMINI_API_KEY` is not set.
 
 ## If something doesn't work
 The app shows a message saying what's wrong:
-- **"The AI isn't set up yet"**: add `ANTHROPIC_API_KEY` in Vercel, then redeploy.
-- **"Your Anthropic API key was rejected"**: check the key, and that your Anthropic account has credit.
+- **"The AI isn't set up yet"**: add `GEMINI_API_KEY` in Vercel, then redeploy.
+- **"Your AI key was rejected"**: check the key in Google AI Studio and paste it again in Vercel, with no spaces.
 - **"Saved on this device only"**: storage isn't connected yet (step 3).
 - **"Wrong password"**: it must match `APP_PASSWORD` exactly.

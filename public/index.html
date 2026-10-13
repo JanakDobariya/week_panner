@@ -562,7 +562,7 @@ function buildICS(){
   L.push("END:VCALENDAR");return L.join("\r\n")+"\r\n";
 }
 /* ---------- ai request ---------- */
-const ERR={unauthorized:"Wrong password. Enter it again.",no_password:"The app has no password yet. Add APP_PASSWORD in Vercel → Settings → Environment Variables, then redeploy.",no_ai_key:"The AI isn't set up yet. Add ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.",bad_ai_key:"Your Anthropic API key was rejected. Check ANTHROPIC_API_KEY in Vercel.",rate_limited:"Too many requests right now. Wait a minute and try again.",overloaded:"Claude is busy right now. Try again in a minute.",too_large:"That's too much at once. Send fewer screenshots.",bad_image:"That screenshot couldn't be read. Try a PNG or JPG."};
+const ERR={unauthorized:"Wrong password. Enter it again.",no_password:"The app has no password yet. Add APP_PASSWORD in Vercel → Settings → Environment Variables, then redeploy.",no_ai_key:"The AI isn't set up yet. Add GEMINI_API_KEY in Vercel → Settings → Environment Variables, then redeploy.",bad_ai_key:"Your AI key was rejected. Check GEMINI_API_KEY in Vercel (it must be from Google AI Studio), then redeploy.",rate_limited:"Too many requests right now. Wait a minute and try again.",overloaded:"The AI is busy right now. Try again in a minute.",too_large:"That's too much at once. Send fewer screenshots.",bad_image:"That screenshot couldn't be read. Try a PNG or JPG."};
 function shrink(file){return new Promise((resolve,reject)=>{
   const url=URL.createObjectURL(file);const img=new Image();
   img.onload=()=>{const max=1800;let w=img.naturalWidth,h=img.naturalHeight;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);
@@ -586,7 +586,7 @@ async function send(){
     const ops=normalizeOps(out.ops);if(ops.length)showOps(ops);
   }catch(e){
     if(e&&e.name==="AbortError"){thinking.textContent="Stopped."}
-    else{thinking.className="msg err";const c=e&&e.code;thinking.textContent=ERR[c]||("Something went wrong: "+((e&&e.message)||"unknown error")+". Try again.");
+    else{thinking.className="msg err";const c=e&&e.code;thinking.textContent=(ERR[c]||"Something went wrong. Try again.")+(e&&e.message&&c!=="unauthorized"?"\n\nDetails: "+e.message:"");
       if(c==="unauthorized")askPassword(true);
       if(text&&!$("prompt").value)$("prompt").value=text}
   }finally{$("send").disabled=false;$("stop").hidden=true;abortCtl=null}
